@@ -7,6 +7,7 @@ import { auth } from "./lib/auth.js";
 import { textsRouter } from "./routes/texts.js";
 import { attemptsRouter } from "./routes/attempts.js";
 import { statsRouter } from "./routes/stats.js";
+import { drillsRouter } from "./routes/drills.js";
 import { requireAuth } from "./middleware/require-auth.js";
 import { authLimiter } from "./middleware/rate-limit.js";
 
@@ -40,6 +41,7 @@ app.get("/api/me", requireAuth, (req, res) => {
 app.use("/api/texts", textsRouter);
 app.use("/api/attempts", attemptsRouter);
 app.use("/api/stats", statsRouter);
+app.use("/api/drills", drillsRouter);
 
 const PORT = process.env.PORT ?? 5000;
 
