@@ -15,3 +15,11 @@ export const attemptSubmitLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: "Too many submissions. Slow down and try again shortly." },
 });
+
+export const drillGenerateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many drills generated. Slow down and try again shortly." },
+});
