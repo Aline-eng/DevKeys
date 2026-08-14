@@ -5,6 +5,7 @@ import { AuthGate } from "@/components/auth/auth-gate";
 import { apiFetch } from "@/lib/api";
 import { TrendChart, type TrendPoint } from "@/components/dashboard/trend-chart";
 import { KeyboardHeatmap, type KeyStat } from "@/components/dashboard/keyboard-heatmap";
+import { WeeklyReportCard, type WeeklyReport } from "@/components/dashboard/weekly-report";
 
 type Overview = {
   totalAttempts: number;
@@ -35,6 +36,7 @@ function DashboardContent() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [keys, setKeys] = useState<KeyStat[]>([]);
   const [attempts, setAttempts] = useState<AttemptHistoryItem[]>([]);
+  const [weeklyReport, setWeeklyReport] = useState<WeeklyReport | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -43,12 +45,14 @@ function DashboardContent() {
       apiFetch<Overview>("/api/stats/overview"),
       apiFetch<{ keys: KeyStat[] }>("/api/stats/keys"),
       apiFetch<{ attempts: AttemptHistoryItem[] }>("/api/attempts?limit=10"),
+      apiFetch<WeeklyReport>("/api/stats/weekly-report"),
     ])
-      .then(([overviewData, keysData, attemptsData]) => {
+      .then(([overviewData, keysData, attemptsData, weeklyReportData]) => {
         if (ignore) return;
         setOverview(overviewData);
         setKeys(keysData.keys);
         setAttempts(attemptsData.attempts);
+        setWeeklyReport(weeklyReportData);
       })
       .catch(() => {
         if (!ignore) setError("Couldn't load your stats. Is the API running?");
@@ -86,6 +90,15 @@ function DashboardContent() {
             <StatTile label="Avg accuracy" value={overview ? `${overview.avgAccuracyPct}%` : "—"} />
             <StatTile label="Sessions" value={overview?.totalAttempts ?? "—"} />
           </div>
+
+          {weeklyReport && (
+            <section>
+              <h2 className="mb-4 text-lg font-semibold">This week</h2>
+              <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+                <WeeklyReportCard report={weeklyReport} />
+              </div>
+            </section>
+          )}
 
           <section>
             <h2 className="mb-4 text-lg font-semibold">WPM over time</h2>

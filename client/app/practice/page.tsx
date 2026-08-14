@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
 import type { TypingResult } from "@/lib/typing-engine";
 import { TypingTest } from "@/components/practice/typing-test";
@@ -21,6 +21,7 @@ export default function PracticePage() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [key, setKey] = useState(0);
+  const [drillLoading, setDrillLoading] = useState(false);
 
   function handleFinish(finishedResult: TypingResult, practiceTextId: string) {
     setResult(finishedResult);
@@ -65,6 +66,25 @@ export default function PracticePage() {
       });
   }
 
+  function loadDrill() {
+    setError(null);
+    setResult(null);
+    setDrillLoading(true);
+    apiFetch<{ text: PracticeText }>("/api/drills/generate", { method: "POST" })
+      .then((data) => {
+        setCurrent(data.text);
+        setKey((k) => k + 1);
+      })
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 400) {
+          setError(err.message);
+        } else {
+          setError("Couldn't generate a drill. Is the API running?");
+        }
+      })
+      .finally(() => setDrillLoading(false));
+  }
+
   // Effect fetches directly (rather than calling loadNext) so no setState
   // runs synchronously in the effect body — only inside the .then callback.
   useEffect(() => {
@@ -87,6 +107,16 @@ export default function PracticePage() {
   return (
     <div className="flex flex-1 flex-col items-center px-6 py-16">
       <h1 className="mb-2 text-2xl font-semibold tracking-tight">Practice</h1>
+
+      {session && (
+        <button
+          onClick={loadDrill}
+          disabled={drillLoading}
+          className="mb-6 rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium transition-colors hover:bg-black/[.04] disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-white/[.06]"
+        >
+          {drillLoading ? "Generating…" : "Practice my weak keys"}
+        </button>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -121,12 +151,23 @@ export default function PracticePage() {
             <Stat label="Accuracy" value={`${result.accuracyPct}%`} />
             <Stat label="Errors" value={result.errorCount} />
           </div>
-          <button
-            onClick={loadNext}
-            className="mt-6 rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
-          >
-            Next text
-          </button>
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={loadNext}
+              className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc]"
+            >
+              Next text
+            </button>
+            {session && (
+              <button
+                onClick={loadDrill}
+                disabled={drillLoading}
+                className="rounded-full border border-zinc-300 px-5 py-2 text-sm font-medium transition-colors hover:bg-black/[.04] disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-white/[.06]"
+              >
+                {drillLoading ? "Generating…" : "Practice my weak keys"}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
