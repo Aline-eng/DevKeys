@@ -89,6 +89,7 @@ export const practiceCategoryEnum = pgEnum("practice_category", [
 export const practiceSourceEnum = pgEnum("practice_source", [
   "curated",
   "user_import",
+  "generated",
 ]);
 
 export const keystrokeEventTypeEnum = pgEnum("keystroke_event_type", [
@@ -183,6 +184,24 @@ export const keyStats = pgTable(
     lastPracticedAt: timestamp("last_practiced_at"),
   },
   (table) => [primaryKey({ columns: [table.userId, table.key] })],
+);
+
+export const bigramStats = pgTable(
+  "bigram_stats",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Two consecutive typed characters, raw (not case/shift-normalized) —
+    // same convention as key_stats.key.
+    bigram: varchar("bigram", { length: 2 }).notNull(),
+    attemptsCount: integer("attempts_count").notNull().default(0),
+    correctCount: integer("correct_count").notNull().default(0),
+    incorrectCount: integer("incorrect_count").notNull().default(0),
+    avgLatencyMs: real("avg_latency_ms"),
+    lastPracticedAt: timestamp("last_practiced_at"),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.bigram] })],
 );
 
 export const typingAttemptsRelations = relations(typingAttempts, ({ one }) => ({

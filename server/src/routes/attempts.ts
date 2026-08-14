@@ -2,7 +2,13 @@ import { Router } from "express";
 import { z } from "zod";
 import { eq, desc, sql } from "drizzle-orm";
 import { db } from "../db/db.js";
-import { typingAttempts, keystrokeEvents, keyStats, practiceTexts } from "../db/schema.js";
+import {
+  typingAttempts,
+  keystrokeEvents,
+  keyStats,
+  bigramStats,
+  practiceTexts,
+} from "../db/schema.js";
 import { requireAuth } from "../middleware/require-auth.js";
 import { attemptSubmitLimiter } from "../middleware/rate-limit.js";
 
@@ -79,6 +85,40 @@ attemptsRouter.post("/", attemptSubmitLimiter, async (req, res) => {
     perKey.set(k.key, entry);
   }
 
+  // Bigrams: only counted for two 'char' events adjacent in the log with no
+  // backspace between them — a backspace breaks the streak, so a corrected
+  // mistake doesn't get counted as a (wrong, fixed) bigram transition.
+  const perBigram = new Map<
+    string,
+    { attempts: number; correct: number; incorrect: number; latencySum: number; latencyCount: number }
+  >();
+  let prevChar: (typeof body.keystrokes)[number] | null = null;
+  for (const k of body.keystrokes) {
+    if (k.eventType !== "char") {
+      prevChar = null;
+      continue;
+    }
+    if (prevChar) {
+      const bigram = prevChar.key + k.key;
+      const entry = perBigram.get(bigram) ?? {
+        attempts: 0,
+        correct: 0,
+        incorrect: 0,
+        latencySum: 0,
+        latencyCount: 0,
+      };
+      entry.attempts += 1;
+      if (prevChar.isCorrect && k.isCorrect) entry.correct += 1;
+      else entry.incorrect += 1;
+      if (k.interKeyIntervalMs !== null) {
+        entry.latencySum += k.interKeyIntervalMs;
+        entry.latencyCount += 1;
+      }
+      perBigram.set(bigram, entry);
+    }
+    prevChar = k;
+  }
+
   const attempt = await db.transaction(async (tx) => {
     const [inserted] = await tx
       .insert(typingAttempts)
@@ -134,6 +174,32 @@ attemptsRouter.post("/", attemptSubmitLimiter, async (req, res) => {
             correctCount: sql`${keyStats.correctCount} + excluded.correct_count`,
             incorrectCount: sql`${keyStats.incorrectCount} + excluded.incorrect_count`,
             avgLatencyMs: sql`(COALESCE(${keyStats.avgLatencyMs}, 0) * ${keyStats.attemptsCount} + COALESCE(excluded.avg_latency_ms, 0) * excluded.attempts_count) / (${keyStats.attemptsCount} + excluded.attempts_count)`,
+            lastPracticedAt: sql`excluded.last_practiced_at`,
+          },
+        });
+    }
+
+    if (perBigram.size > 0) {
+      const bigramRows = Array.from(perBigram.entries()).map(([bigram, v]) => ({
+        userId,
+        bigram,
+        attemptsCount: v.attempts,
+        correctCount: v.correct,
+        incorrectCount: v.incorrect,
+        avgLatencyMs: v.latencyCount > 0 ? v.latencySum / v.latencyCount : null,
+        lastPracticedAt: completedAt,
+      }));
+
+      await tx
+        .insert(bigramStats)
+        .values(bigramRows)
+        .onConflictDoUpdate({
+          target: [bigramStats.userId, bigramStats.bigram],
+          set: {
+            attemptsCount: sql`${bigramStats.attemptsCount} + excluded.attempts_count`,
+            correctCount: sql`${bigramStats.correctCount} + excluded.correct_count`,
+            incorrectCount: sql`${bigramStats.incorrectCount} + excluded.incorrect_count`,
+            avgLatencyMs: sql`(COALESCE(${bigramStats.avgLatencyMs}, 0) * ${bigramStats.attemptsCount} + COALESCE(excluded.avg_latency_ms, 0) * excluded.attempts_count) / (${bigramStats.attemptsCount} + excluded.attempts_count)`,
             lastPracticedAt: sql`excluded.last_practiced_at`,
           },
         });
