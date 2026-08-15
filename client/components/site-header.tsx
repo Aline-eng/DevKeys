@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
 
@@ -10,7 +11,8 @@ export function SiteHeader() {
 
   return (
     <header className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-      <Link href="/" className="font-semibold tracking-tight">
+      <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+        <Image src="/favicon-32.png" alt="" width={28} height={28} className="rounded-sm" />
         DevKeys
       </Link>
       <nav className="flex items-center gap-4 text-sm">
